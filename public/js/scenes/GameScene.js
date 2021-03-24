@@ -1,5 +1,8 @@
 // import Phaser from "phaser"
 
+import ProductionBuilding from "../models/buildings/ProductionBuilding.js";
+
+
 export default class GameScene extends Phaser.Scene {
 
     constructor() {
@@ -33,19 +36,20 @@ export default class GameScene extends Phaser.Scene {
 
         const tileset = this.map.addTilesetImage("MasterTileset1.0", "tiles");
 
-        this.obstruct = this.map.createStaticLayer("Obstruct", tileset, 0, 0)
+        this.obstruct = this.map.createLayer("Obstruct", tileset, 0, 0)
+        this.trees = this.map.createLayer("Trees", tileset, 0, 0)
         console.log("test log")
 
         // Parameters: layer name (or index) from Tiled, tileset, x, y
-        this.ground = this.map.createStaticLayer("Ground", tileset, 0, 0)
-
-        this.buildings = this.map.createDynamicLayer("Buildings", tileset, 0, 0)
+        this.ground = this.map.createLayer("Ground", tileset, 0, 0)
+        this.landscape = this.map.createLayer("Landscape", tileset, 0, 0)
+        this.buildings = this.map.createLayer("Buildings", tileset, 0, 0)
         console.log(this.buildings)
 
 
 
 
-        this.path = this.map.createDynamicLayer("Path", tileset, 0, 0)
+        this.path = this.map.createLayer("Path", tileset, 0, 0)
 
         const socketInitCB = (updateArray) => {
             console.log(updateArray)
@@ -54,6 +58,10 @@ export default class GameScene extends Phaser.Scene {
                 console.log(newTile.properties)
             });
         }
+
+
+
+
 
         const boundSocketInitCB = socketInitCB.bind()
 
@@ -83,9 +91,14 @@ export default class GameScene extends Phaser.Scene {
         this.marker.lineStyle(3, 0xff4f78, 1);
         this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
 
+        this.marker.clear()
+
+        this.testGraphic = this.add.graphics();
+        this.testGraphic.lineStyle(2, 0xffffff)
+
         // Set up the arrows to control the camera
         const cursors = this.input.keyboard.createCursorKeys();
-        this.controls = new Phaser.Cameras.Controls.Fixed({
+        this.controls = new Phaser.Cameras.Controls.FixedKeyControl({
             camera: this.cameras.main,
             left: cursors.left,
             right: cursors.right,
@@ -94,7 +107,7 @@ export default class GameScene extends Phaser.Scene {
             down: cursors.down,
             speed: 0.5
         });
-        this.cameras.main.setZoom(8)
+        this.cameras.main.setZoom(1)
 
         const clickCallback = () => {
             // console.log(this)
@@ -153,18 +166,18 @@ export default class GameScene extends Phaser.Scene {
             console.log(this.brush)
         }
 
-        this.input.keyboard.on('keydown_Q', boundZoomCB)
-        this.input.keyboard.on('keydown_E', boundZoomCB)
+        this.input.keyboard.on('keydown-Q', boundZoomCB)
+        this.input.keyboard.on('keydown-E', boundZoomCB)
 
 
-        this.input.keyboard.on('keydown_ONE', this.drawSelect)
-        this.input.keyboard.on('keydown_TWO', this.drawSelect)
+        this.input.keyboard.on('keydown-ONE', this.drawSelect)
+        this.input.keyboard.on('keydown-TWO', this.drawSelect)
 
-        this.input.keyboard.on('keydown_THREE', this.drawSelect)
+        this.input.keyboard.on('keydown-THREE', this.drawSelect)
 
-        this.input.keyboard.on('keydown_FOUR', this.drawSelect)
+        this.input.keyboard.on('keydown-FOUR', this.drawSelect)
 
-        this.input.keyboard.on('keydown_FIVE', this.drawSelect)
+        this.input.keyboard.on('keydown-FIVE', this.drawSelect)
 
 
 
@@ -187,6 +200,7 @@ export default class GameScene extends Phaser.Scene {
     update(time, delta) {
         // Apply the controls to the camera each update tick of the game
         this.controls.update(delta);
+        this.valid = false;
 
         // Convert the mouse position to world position within the camera
         const worldPoint = this.input.activePointer.positionToCamera(this.cameras.main);
@@ -194,12 +208,49 @@ export default class GameScene extends Phaser.Scene {
         const pointerTileXY = this.path.worldToTileXY(worldPoint.x, worldPoint.y);
         const snappedWorldPoint = this.path.tileToWorldXY(pointerTileXY.x, pointerTileXY.y)
         this.marker.setPosition(snappedWorldPoint.x, snappedWorldPoint.y)
-        if (this.obstruct.getTileAtWorldXY(worldPoint.x, worldPoint.y)) {
-            this.marker.lineStyle(2, 0xff4f78, 1);
-            this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
-        } else {
-            this.marker.lineStyle(2, 0x2fff28, 1);
-            this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
+        this.marker.clear()
+
+        if (this.brush == 1) {
+            if (this.obstruct.getTileAtWorldXY(worldPoint.x, worldPoint.y)) {
+                this.setMarkerRed();
+            } else {
+                this.setMarkerGreen();
+                this.valid = true;
+
+            }
+
+        } else if (this.brush == 2) {
+            let obstructTiles = this.obstruct.getTilesWithin(pointerTileXY.x, pointerTileXY.y - 1, 2, 2)
+
+            let obstructArray = [false, false, false, false]
+            for (let i = 0; i < obstructArray.length; i++) {
+                // let worldXY = this.obstruct.tileToWorldXY(obstructTiles[i].x, obstructTiles[i].y)
+                // this.testGraphic.strokeRect(worldXY.x, worldXY.y, this.map.tileWidth, this.map.tileHeight);
+                if (obstructTiles[i].index != -1) {
+                    obstructArray[i] = true
+                }
+                if (arraysEqual(obstructArray, [false, false, false, false])) {
+                    this.valid = true;
+                }
+                this.setMarkerFarm(obstructArray);
+
+            }
+        }
+        else if (this.brush == 5) {
+
+            if (this.obstruct.getTileAtWorldXY(worldPoint.x, worldPoint.y) && (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index != 82)) { // Up
+                console.log(true)
+                this.setMarkerGreen();
+                this.valid = true;
+
+
+            } else {
+                this.setMarkerRed();
+
+            }
+        }
+        else {
+            this.marker.clear()
         }
         if (this.input.activePointer.isDown) {
             this.cameras.main.scrollX = -400
@@ -210,7 +261,6 @@ export default class GameScene extends Phaser.Scene {
 
         // Draw tiles (only within the groundLayer)
         if (this.input.manager.activePointer.isDown) {
-            console.log(this.brush)
             if (!this.obstruct.getTileAtWorldXY(worldPoint.x, worldPoint.y)) {
                 switch (this.brush) {
                     case 1:
@@ -225,49 +275,60 @@ export default class GameScene extends Phaser.Scene {
                         break;
 
                     case 2:
+                        console.log("Attempting farm")
+                        console.log(this.valid)
+                        if (this.valid == true) {
+                            let farm = new ProductionBuilding({ x: pointerTileXY.x, y: pointerTileXY.y }, "farm")
+                            let farmTiles = farm.renderBuilding(this.buildings, this.obstruct)
+                            for (let i = 0; i < farmTiles.length; i++) {
+                                this.socket.emit("mapUpdate", { index: farmTiles[i].index, x: farmTiles[i].x, y: farmTiles[i].y, properties: farmTiles[i].properties });
 
+                            }
+                        }
                         break;
                     default:
                         break;
                 }
             } else {
                 if (this.brush == 5) {
-                    let pier = null;
-                    let index;
-                    if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82) { // Down
-                        console.log("Boarder!!!!")
-                        pier = this.path.putTileAt(93, pointerTileXY.x, pointerTileXY.y)
-                        pier.properties.surround = "0010"
-                        pier.properties.pier = true
+                    if (!this.path.getTileAt(pointerTileXY.x, pointerTileXY.y)?.properties.pier) {
+                        let pier = null;
+                        let index;
+                        if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82) { // Down
+                            console.log("Boarder!!!!")
+                            pier = this.path.putTileAt(93, pointerTileXY.x, pointerTileXY.y)
+                            pier.properties.surround = "0010"
+                            pier.properties.pier = true
 
-                        this.updatePath(2, pointerTileXY.x, pointerTileXY.y - 1)
+                            this.updatePath(2, pointerTileXY.x, pointerTileXY.y - 1)
 
-                    } else if (this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82) { // Left
-                        console.log(`Index: ${17}`)
-                        pier = this.path.putTileAt(108, pointerTileXY.x, pointerTileXY.y)
-                        pier.properties.surround = "0001"
-                        pier.properties.pier = true
+                        } else if (this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82) { // Left
+                            console.log(`Index: ${17}`)
+                            pier = this.path.putTileAt(108, pointerTileXY.x, pointerTileXY.y)
+                            pier.properties.surround = "0001"
+                            pier.properties.pier = true
 
-                        this.updatePath(3, pointerTileXY.x + 1, pointerTileXY.y)
+                            this.updatePath(3, pointerTileXY.x + 1, pointerTileXY.y)
 
-                    } else if (this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82) { // Right
-                        console.log(`Index: ${19}`)
-                        pier = this.path.putTileAt(109, pointerTileXY.x, pointerTileXY.y)
-                        pier.properties.surround = "0100"
-                        pier.properties.pier = true
+                        } else if (this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82) { // Right
+                            console.log(`Index: ${19}`)
+                            pier = this.path.putTileAt(109, pointerTileXY.x, pointerTileXY.y)
+                            pier.properties.surround = "0100"
+                            pier.properties.pier = true
 
-                        this.updatePath(1, pointerTileXY.x - 1, pointerTileXY.y)
+                            this.updatePath(1, pointerTileXY.x - 1, pointerTileXY.y)
 
-                    } else if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index == 2) { // Up
-                        console.log(`Index: ${2}`)
-                        pier = this.path.putTileAt(77, pointerTileXY.x, pointerTileXY.y)
-                        pier.properties.surround = "1000"
-                        pier.properties.pier = true
+                        } else if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index != 82) { // Up
+                            console.log(`Index: ${2}`)
+                            pier = this.path.putTileAt(77, pointerTileXY.x, pointerTileXY.y)
+                            pier.properties.surround = "1000"
+                            pier.properties.pier = true
 
-                        this.updatePath(0, pointerTileXY.x, pointerTileXY.y + 1)
-                    }
-                    if (pier) {
-                        this.socket.emit("mapUpdate", { index: pier.index, x: pier.x, y: pier.y, properties: pier.properties })
+                            this.updatePath(0, pointerTileXY.x, pointerTileXY.y + 1)
+                        }
+                        if (pier) {
+                            this.socket.emit("mapUpdate", { index: pier.index, x: pier.x, y: pier.y, properties: pier.properties })
+                        }
                     }
                 }
             }
@@ -275,6 +336,51 @@ export default class GameScene extends Phaser.Scene {
         }
     }
 
+
+
+
+    setMarkerGreen() {
+        this.marker.lineStyle(2, 0x2fff28, 1);
+        this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
+    }
+
+    setMarkerRed() {
+        this.marker.lineStyle(2, 0xff4f78, 1);
+        this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
+    }
+
+    setMarkerFarm(obstruct) {
+        // return
+        if (!obstruct[2]) {
+            this.marker.lineStyle(2, 0x2fff28, 1);//#2fff28
+            this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
+        } else {
+            this.marker.lineStyle(2, 0xff4f78, 1); //#ff4f78
+            this.marker.strokeRect(0, 0, this.map.tileWidth, this.map.tileHeight);
+        }
+        if (!obstruct[3]) {
+            this.marker.lineStyle(2, 0x2fff28, 1);//#2fff28
+            this.marker.strokeRect(this.map.tileWidth, 0, this.map.tileWidth, this.map.tileHeight);
+        } else {
+            this.marker.lineStyle(2, 0xff4f78, 1); //#ff4f78
+            this.marker.strokeRect(this.map.tileWidth, 0, this.map.tileWidth, this.map.tileHeight);
+        }
+        if (!obstruct[0]) {
+            this.marker.lineStyle(2, 0x2fff28, 1);//#2fff28
+            this.marker.strokeRect(0, -this.map.tileHeight, this.map.tileWidth, this.map.tileHeight);
+        } else {
+            this.marker.lineStyle(2, 0xff4f78, 1); //#ff4f78
+            this.marker.strokeRect(0, -this.map.tileHeight, this.map.tileWidth, this.map.tileHeight);
+        }
+        if (!obstruct[1]) {
+            this.marker.lineStyle(2, 0x2fff28, 1);//#2fff28
+            this.marker.strokeRect(this.map.tileWidth, -this.map.tileHeight, this.map.tileWidth, this.map.tileHeight);
+        } else {
+            this.marker.lineStyle(2, 0xff4f78, 1); //#ff4f78
+            this.marker.strokeRect(this.map.tileWidth, -this.map.tileHeight, this.map.tileWidth, this.map.tileHeight);
+        }
+
+    }
 
     setCharAt(str, index, chr) {
         if (index > str.length - 1) return str;
@@ -392,4 +498,21 @@ export default class GameScene extends Phaser.Scene {
             tile.properties.wibble = true;
         }
     }
+}
+
+
+function arraysEqual(a, b) {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (a.length !== b.length) return false;
+
+    // If you don't care about the order of the elements inside
+    // the array, you should sort both arrays here.
+    // Please note that calling sort on an array will modify that array.
+    // you might want to clone your array first.
+
+    for (var i = 0; i < a.length; ++i) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
 }

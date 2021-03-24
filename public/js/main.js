@@ -10,7 +10,7 @@ const config = {
     parent: "game-container",
     pixelArt: true,
     backgroundColor: "#1d212d",
-    scene: [LoginScene, GameScene, UIScene,]
+    scene: [GameScene]
 };
 
 const game = new Phaser.Game(config);
