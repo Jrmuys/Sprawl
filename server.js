@@ -9,7 +9,7 @@ const env = require('dotenv').config()
 var serviceAccount = require("./private/sprawl-c51a2-firebase-adminsdk-4a1sv-2b9d93389f.json");
 serviceAccount.private_key = process.env.FIREBASE_PRIVATE_KEY
 serviceAccount.private_key_id = process.env.FIREBASE_PRIVATE_KEY_ID
-
+console.log(process.env.FIREBASE_PRIVATE_KEY)
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
     databaseURL: "https://sprawl-c51a2-default-rtdb.firebaseio.com"
