@@ -1,4 +1,5 @@
-import House from "./buildings/House";
+import House from "./Buildings/House";
+import ProductionBuilding from "./Buildings/ProductionBuilding";
 import Person from "./Person";
 
 export default class Town {
@@ -47,6 +48,22 @@ export default class Town {
         this.buildings.push(newHouse)
     }
 
+    deleteHouse(id, buildingLayer, obstructLayer) {
+
+    }
+
+    deleteBuilding(id, buildingLayer, obstructLayer) {
+        this.productionBuildings[id].destroyBuilding(buildingLayer, obstructLayer)
+        this.productionBuildings.splice(id, 1); // Remove entry from array
+    }
+
+    addFarm(location, mapLayer, obstructLayer) {
+
+        let newFarm = new ProductionBuilding(this.productionBuildings.length, location, "farm")
+        newFarm.renderBuilding(this.productionBuildings.length, mapLayer, obstructLayer)
+        this.productionBuildings.push()
+    }
+
     runLoop() {
         if (!this.pause) {
             // Do town logic
@@ -75,7 +92,6 @@ export default class Town {
             }
         }
 
-        for (let i; i < this.)
 
     }
 

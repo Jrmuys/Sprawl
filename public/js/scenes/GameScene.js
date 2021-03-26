@@ -1,6 +1,6 @@
 // import Phaser from "phaser"
 
-import ProductionBuilding from "../models/buildings/ProductionBuilding.js";
+import ProductionBuilding from "../models/Buildings/ProductionBuilding.js";
 
 
 export default class GameScene extends Phaser.Scene {
@@ -54,14 +54,25 @@ export default class GameScene extends Phaser.Scene {
         const socketInitCB = (updateArray) => {
             console.log(updateArray)
             updateArray.forEach(newTile => {
-                let tileTest = this.path.putTileAt(newTile.index, newTile.x, newTile.y).properties = newTile.properties
-                console.log(newTile.properties)
+                if (newTile.layer == "path") {
+                    this.path.putTileAt(newTile.index, newTile.x, newTile.y).properties = newTile.properties
+                } else if (newTile.layer == "buildings")
+                    this.buildings.putTileAt(newTile.index, newTile.x, newTile.y).properties = newTile.properties
+                this.obstruct.putTileAt(177, newTile.x, newTile.y)
+
             });
         }
 
-
-
-
+        const tileDeletedCB = (tile) => {
+            console.log("Deleting tile: ", tile)
+            if (tile.layer == "path") {
+                this.path.removeTileAt(tile.x, tile.y)
+                this.obstruct.removeTileAt(tile.x, tile.y)
+            } else if (tile.layer == "buildings") {
+                this.buildings.removeTileAt(tile.x, tile.y)
+                this.obstruct.removeTileAt(tile.x, tile.y)
+            } 0
+        }
 
         const boundSocketInitCB = socketInitCB.bind()
 
@@ -69,6 +80,8 @@ export default class GameScene extends Phaser.Scene {
             console.log("Connected!")
 
         })
+
+        this.socket.on('tileDeleted', tileDeletedCB)
 
         this.socket.on('mapInit', socketInitCB)
 
@@ -178,6 +191,7 @@ export default class GameScene extends Phaser.Scene {
         this.input.keyboard.on('keydown-FOUR', this.drawSelect)
 
         this.input.keyboard.on('keydown-FIVE', this.drawSelect)
+        this.input.keyboard.on('keydown-ZERO', this.drawSelect)
 
 
 
@@ -226,29 +240,51 @@ export default class GameScene extends Phaser.Scene {
             for (let i = 0; i < obstructArray.length; i++) {
                 // let worldXY = this.obstruct.tileToWorldXY(obstructTiles[i].x, obstructTiles[i].y)
                 // this.testGraphic.strokeRect(worldXY.x, worldXY.y, this.map.tileWidth, this.map.tileHeight);
-                if (obstructTiles[i].index != -1) {
+                if (obstructTiles[i]?.index != -1) {
                     obstructArray[i] = true
                 }
                 if (arraysEqual(obstructArray, [false, false, false, false])) {
+                    console.log("This is a valid array? ", obstructArray)
                     this.valid = true;
+                } else {
+                    this.valid = false;
                 }
                 this.setMarkerFarm(obstructArray);
 
             }
         }
         else if (this.brush == 5) {
+            let groundTileIndex = this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y).index
+            if (groundTileIndex == 82 || groundTileIndex == 33 || groundTileIndex == 34 || groundTileIndex == 35) {
+                if ((this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82 ||
+                    this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82 ||
+                    this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82 ||
+                    this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index != 82)) {
+                    this.valid = true;
+                    this.setMarkerGreen();
 
-            if (this.obstruct.getTileAtWorldXY(worldPoint.x, worldPoint.y) && (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82 || this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index != 82)) { // Up
-                console.log(true)
-                this.setMarkerGreen();
-                this.valid = true;
 
+                } else {
+                    this.setMarkerRed();
+
+                }
 
             } else {
                 this.setMarkerRed();
 
             }
         }
+        else if (this.brush == 0) {
+            if (this.path.getTileAt(pointerTileXY.x, pointerTileXY.y)) {
+                this.setMarkerGreen()
+            }
+            else if (this.buildings.getTileAt(pointerTileXY.x, pointerTileXY.y)) {
+                this.setMarkerGreen()
+            } else {
+                this.setMarkerRed()
+            }
+        }
+
         else {
             this.marker.clear()
         }
@@ -265,70 +301,104 @@ export default class GameScene extends Phaser.Scene {
                 switch (this.brush) {
                     case 1:
                         console.log("Brush is 1")
-                        if (!this.path.getTileAtWorldXY(worldPoint.x, worldPoint.y)) {
+                        if (this.valid) {
                             let tile = this.placePath(pointerTileXY)
 
                             this.getTileProperties()
                             // console.log(`tile: `, this.path.getTileAtWorldXY(worldPoint.x, worldPoint.y).index)
-                            this.socket.emit("mapUpdate", { index: tile.index, x: tile.x, y: tile.y, properties: tile.properties })
+                            this.socket.emit("mapUpdate", { index: tile.index, x: tile.x, y: tile.y, properties: tile.properties, layer: "path" })
                         }
                         break;
 
                     case 2:
                         console.log("Attempting farm")
-                        console.log(this.valid)
                         if (this.valid == true) {
                             let farm = new ProductionBuilding({ x: pointerTileXY.x, y: pointerTileXY.y }, "farm")
                             let farmTiles = farm.renderBuilding(this.buildings, this.obstruct)
+
                             for (let i = 0; i < farmTiles.length; i++) {
-                                this.socket.emit("mapUpdate", { index: farmTiles[i].index, x: farmTiles[i].x, y: farmTiles[i].y, properties: farmTiles[i].properties });
+                                this.socket.emit("mapUpdate", { index: farmTiles[i].index, x: farmTiles[i].x, y: farmTiles[i].y, properties: farmTiles[i].properties, layer: "buildings" });
 
                             }
                         }
+                        break;
+                    case 0:
+
                         break;
                     default:
                         break;
                 }
             } else {
+
                 if (this.brush == 5) {
                     if (!this.path.getTileAt(pointerTileXY.x, pointerTileXY.y)?.properties.pier) {
                         let pier = null;
                         let index;
                         if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y)?.index != 82) { // Down
-                            console.log("Boarder!!!!")
                             pier = this.path.putTileAt(93, pointerTileXY.x, pointerTileXY.y)
                             pier.properties.surround = "0010"
                             pier.properties.pier = true
 
-                            this.updatePath(2, pointerTileXY.x, pointerTileXY.y - 1)
+                            this.updatePath(2, pointerTileXY.x, pointerTileXY.y - 1, true)
 
                         } else if (this.ground.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)?.index != 82) { // Left
-                            console.log(`Index: ${17}`)
                             pier = this.path.putTileAt(108, pointerTileXY.x, pointerTileXY.y)
                             pier.properties.surround = "0001"
                             pier.properties.pier = true
 
-                            this.updatePath(3, pointerTileXY.x + 1, pointerTileXY.y)
+                            this.updatePath(3, pointerTileXY.x + 1, pointerTileXY.y, true)
 
                         } else if (this.ground.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)?.index != 82) { // Right
-                            console.log(`Index: ${19}`)
                             pier = this.path.putTileAt(109, pointerTileXY.x, pointerTileXY.y)
                             pier.properties.surround = "0100"
                             pier.properties.pier = true
 
-                            this.updatePath(1, pointerTileXY.x - 1, pointerTileXY.y)
+                            this.updatePath(1, pointerTileXY.x - 1, pointerTileXY.y, true)
 
                         } else if (this.ground.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)?.index != 82) { // Up
-                            console.log(`Index: ${2}`)
                             pier = this.path.putTileAt(77, pointerTileXY.x, pointerTileXY.y)
                             pier.properties.surround = "1000"
                             pier.properties.pier = true
 
-                            this.updatePath(0, pointerTileXY.x, pointerTileXY.y + 1)
+                            this.updatePath(0, pointerTileXY.x, pointerTileXY.y + 1, true)
                         }
                         if (pier) {
-                            this.socket.emit("mapUpdate", { index: pier.index, x: pier.x, y: pier.y, properties: pier.properties })
+                            this.obstruct.putTileAt(177, pier.x, pier.y)
+                            this.socket.emit("mapUpdate", { index: pier.index, x: pier.x, y: pier.y, properties: pier.properties, layer: "path" })
                         }
+                    }
+                } else if (this.brush == 0) {
+                    if (this.path.getTileAt(pointerTileXY.x, pointerTileXY.y)) {
+                        console.log("Removing path...")
+                        this.path.removeTileAt(pointerTileXY.x, pointerTileXY.y)
+                        this.obstruct.removeTileAt(pointerTileXY.x, pointerTileXY.y)
+                        if (this.path.getTileAt(pointerTileXY.x, pointerTileXY.y + 1)) { // up
+
+                            console.log("updating path to the up from delete...")
+                            this.updatePath(0, pointerTileXY.x, pointerTileXY.y + 1, false)
+                        }
+                        if (this.path.getTileAt(pointerTileXY.x + 1, pointerTileXY.y)) { // right
+                            console.log("updating path to the right from delete...")
+                            this.updatePath(3, pointerTileXY.x + 1, pointerTileXY.y, false)
+
+                        }
+                        if (this.path.getTileAt(pointerTileXY.x, pointerTileXY.y - 1)) { // down
+                            console.log("updating path to the down from delete...")
+                            this.updatePath(2, pointerTileXY.x, pointerTileXY.y - 1, false)
+
+                        }
+                        if (this.path.getTileAt(pointerTileXY.x - 1, pointerTileXY.y)) { // left
+                            console.log("updating path to the left from delete...")
+                            this.updatePath(1, pointerTileXY.x - 1, pointerTileXY.y, false)
+
+                        }
+                        this.socket.emit("deleteTile", { x: pointerTileXY.x, y: pointerTileXY.y, layer: "path" })
+                    }
+                    if (this.buildings.getTileAt(pointerTileXY.x, pointerTileXY.y)) {
+                        this.buildings.removeTileAt(pointerTileXY.x, pointerTileXY.y)
+                        this.obstruct.removeTileAt(pointerTileXY.x, pointerTileXY.y)
+                        this.socket.emit("deleteTile", { x: pointerTileXY.x, y: pointerTileXY.y, layer: "buildings" })
+
                     }
                 }
             }
@@ -389,17 +459,26 @@ export default class GameScene extends Phaser.Scene {
 
 
 
-    updatePath(dir, x, y) {
+    updatePath(dir, x, y, add) {
         let tile
         if (tile = this.path.getTileAt(x, y)) {
             if (!tile.properties.pier) {
-                // console.log(tile)
-                let surround = this.setCharAt(tile.properties.surround, dir, 1)
+                let surround;
+                console.log("Add: ", add)
+                if (add) {
+                    console.log("Add")
+                    surround = this.setCharAt(tile.properties.surround, dir, 1)
+                } else {
+                    console.log("Sub")
+                    surround = this.setCharAt(tile.properties.surround, dir, 0)
+                }
                 let index = this.getPathIndex(surround)
                 let newTile = this.path.putTileAt(index, x, y)
                 console.log("NEW TILE PROPERTIES", newTile.properties.surround = surround)
-                this.socket.emit("mapUpdate", { index: index, x: x, y: y, properties: newTile.properties })
+                this.socket.emit("mapUpdate", { index: index, x: x, y: y, properties: newTile.properties, layer: "path" })
             }
+        } else {
+            console.log("Tried updating... No path found!")
         }
 
 
@@ -410,34 +489,30 @@ export default class GameScene extends Phaser.Scene {
         if (this.path.getTileAt(tileXY.x, tileXY.y + 1)) { // up
             console.log("Down")
             surround = this.setCharAt(surround, 2, "1")
-            this.updatePath(0, tileXY.x, tileXY.y + 1)
+            this.updatePath(0, tileXY.x, tileXY.y + 1, true)
+
         }
         if (this.path.getTileAt(tileXY.x + 1, tileXY.y)) { // right
             console.log("Right")
             surround = this.setCharAt(surround, 1, "1")
-            this.updatePath(3, tileXY.x + 1, tileXY.y)
-
-
+            this.updatePath(3, tileXY.x + 1, tileXY.y, true)
 
         }
         if (this.path.getTileAt(tileXY.x, tileXY.y - 1)) { // down
             console.log("Up")
             surround = this.setCharAt(surround, 0, "1")
-            this.updatePath(2, tileXY.x, tileXY.y - 1)
-
-
+            this.updatePath(2, tileXY.x, tileXY.y - 1, true)
 
         }
         if (this.path.getTileAt(tileXY.x - 1, tileXY.y)) { // left
             console.log("Left")
             surround = this.setCharAt(surround, 3, "1")
-            this.updatePath(1, tileXY.x - 1, tileXY.y)
-
-
+            this.updatePath(1, tileXY.x - 1, tileXY.y, true)
 
         }
         let index = this.getPathIndex(surround)
         let tile = this.path.putTileAt(index, tileXY.x, tileXY.y)
+        this.obstruct.putTileAt(177, tileXY.x, tileXY.y)
         tile.properties.surround = surround
         console.log("surround ", surround)
         // console.log("PlaceTile", tile)
