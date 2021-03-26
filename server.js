@@ -3,8 +3,11 @@ var app = express();
 var server = require('http').Server(app);
 const io = require('socket.io')(server);
 var admin = require('firebase-admin');
+const env = require('dotenv').config()
+
 
 var serviceAccount = require("./private/sprawl-c51a2-firebase-adminsdk-4a1sv-2b9d93389f.json");
+serviceAccount.private_key = process.env.FIREBASE_PRIVATE_KEY
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
@@ -85,7 +88,23 @@ io.on('connection', function (socket) {
         socket.broadcast.emit('updateMap', tile)
 
     })
+
+    socket.on('deleteTile', function (tile) {
+        console.log("deleting tile: ", tile)
+        removeFromUpdateArray(tile)
+        socket.broadcast.emit('tileDeleted', tile)
+    })
 });
+
+function removeFromUpdateArray(tileToRemove) {
+    mapUpdates.forEach(tile => {
+        if (tile.x == tileToRemove.x) {
+            if (tile.y == tileToRemove.y) {
+                tile.index = -1;
+            }
+        }
+    });
+}
 
 function addToUpdateArray(newTile) {
 
